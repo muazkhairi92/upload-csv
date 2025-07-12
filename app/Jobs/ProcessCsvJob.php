@@ -45,7 +45,15 @@ class ProcessCsvJob implements ShouldQueue
         //Read header row
         $header = fgetcsv($handle);
 
-        if (!$header || !empty(array_diff($requiredHeaders, array_map('strtoupper', $header)))) {
+        if (isset($header[0])) {
+            // Remove BOM if present
+            $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]);
+        }
+        $normalizedHeader = array_map(fn($h) => strtoupper(trim($h)), $header);
+        $normalizedRequired = array_map(fn($h) => strtoupper(trim($h)), $requiredHeaders);
+        $missing = array_diff($normalizedRequired, $normalizedHeader);
+
+        if (!$header || !empty($missing)) {
             fclose($handle);
             throw new \Exception('Missing required headers. Required: ' . implode(', ', $requiredHeaders));
         }
@@ -65,7 +73,17 @@ class ProcessCsvJob implements ShouldQueue
         $totalRows = 0;
 
         while (($row = fgetcsv($handle)) !== false) {
-            $rows[] = $row;
+
+            if (count(array_filter($row)) === 0) {
+                continue;
+            }
+
+            // Reindex row to match normalized headers
+            $assoc = array_combine($normalizedHeader, $row);
+
+            // Optional: Filter to only required keys (in correct order)
+            $filtered = array_intersect_key($assoc, array_flip($normalizedRequired));
+            $rows[] = $filtered;
             $totalRows++;
 
             if (count($rows) === 500) {

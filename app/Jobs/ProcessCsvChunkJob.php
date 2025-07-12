@@ -27,19 +27,20 @@ class ProcessCsvChunkJob implements ShouldQueue
     public function handle()
     {
         foreach ($this->rows as $row) {
-            $uniqueKey = $row[0];
+        
+            $uniqueKey = $row['UNIQUE_KEY'];
 
             CsvData::updateOrCreate(
                 ['unique_key' => $uniqueKey],
                 [
-                    'product_title' => $row[4] ?? null,
-                    'product_description' => $row[5] ?? null,
-                    'style' => $row[1] ?? null,
-                    'sanmar_mainframe_color' => $row[6] ?? null,
-                    'size' => $row[2] ?? null,
-                    'color_name' => $row[3] ?? null,
+                    'product_title' => $row['PRODUCT_TITLE'] ?? null,
+                    'product_description' => $row['PRODUCT_DESCRIPTION'] ?? null,
+                    'style' => $row['STYLE#'] ?? null,
+                    'sanmar_mainframe_color' => $row['SANMAR_MAINFRAME_COLOR'] ?? null,
+                    'size' => $row['SIZE'] ?? null,
+                    'color_name' => $row['COLOR_NAME'] ?? null,
                     'file_id' => $this->fileId,
-                    'piece_price' => $row[7] ?? null,
+                    'piece_price' => $row['PIECE_PRICE'] ?? null,
                 ]
             );
             

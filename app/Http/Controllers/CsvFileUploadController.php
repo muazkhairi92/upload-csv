@@ -21,16 +21,9 @@ class CsvFileUploadController extends Controller
 
     public function upload(Request $request)
     {
-        $validator = Validator::make($request->all(), [
+        $request->validate([
             'csv' => 'required|file|mimes:csv|max:120000', 
         ]);
-            
-        if ($validator->fails()) {
-            return response()->json([
-                'success' => false,
-                'message' => $validator->errors()->first()
-            ], 422);
-        }
         $file = $request->file('csv');
         $fileName = $file->getClientOriginalName();
         $directory = 'csvs';
@@ -45,18 +38,24 @@ class CsvFileUploadController extends Controller
         $handle = fopen($path, 'r');
         $header = fgetcsv($handle);
 
-        if (!$header || !empty(array_diff($requiredHeaders, array_map('strtoupper', $header)))) {
-            fclose($handle);
-            throw new \Exception('Missing required headers. Required: ' . implode(', ', $requiredHeaders));
+        if (isset($header[0])) {
+            $header[0] = preg_replace('/^\xEF\xBB\xBF/', '', $header[0]);
+        }
+        $normalizedHeader = array_map(fn($h) => strtoupper(trim($h)), $header);
+        $normalizedRequired = array_map(fn($h) => strtoupper(trim($h)), $requiredHeaders);
+        $missing = array_diff($normalizedRequired, $normalizedHeader);
+
+        if (!$header || !empty($missing)) {
+            return redirect('/')
+                ->withErrors(['csv' => 'Missing required headers: '. implode(', ',  $missing)])
+                ->withInput();        
         }
         fclose($handle);
 
-        $uniqueFilename = $this->getUniqueFilename($directory, $fileName);
-
-        $path = $file->storeAs('csvs', uniqid() . '-' . $uniqueFilename,'local');
+        $path = $file->storeAs('csvs', uniqid() . '-' . $fileName,'local');
 
         $csv = CsvFileUpload::create([
-            'filename' => $uniqueFilename,
+            'filename' => $fileName,
             'path' => $path,
             'status' => 'pending',
         ]);
@@ -73,24 +72,6 @@ class CsvFileUploadController extends Controller
             'total' => $csvFile->total_rows,
             'status' => $csvFile->status,
         ]);
-    }
-
-    /**
-     * Get a unique filename for the upload
-     */
-    private function getUniqueFilename($directory, $originalName)
-    {
-        $filename = pathinfo($originalName, PATHINFO_FILENAME);
-        $extension = pathinfo($originalName, PATHINFO_EXTENSION);
-        $counter = 0;
-        $newName = $originalName;
-
-        while (Storage::exists($directory . '/' . $newName)) {
-            $counter++;
-            $newName = $filename . "($counter)." . $extension;
-        }
-
-        return $newName;
     }
 
 }
